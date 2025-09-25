@@ -4,7 +4,7 @@ using System.Text;
 using SteamDatabase.ValvePak;
 
 namespace VpkInfo;
-d
+
 /*
  * 读取指定的vpk文件，获取其文件中的addoninfo.txt和missions/文件夹下的文本文件的内容
  */

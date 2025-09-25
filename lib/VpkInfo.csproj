@@ -4,7 +4,10 @@
         <TargetFramework>net9.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <AssemblyName>vpkinfo</AssemblyName>
         <PublishAot>true</PublishAot>
+        <PublishTrimmed>true</PublishTrimmed>
+        <TrimMode>Link</TrimMode>
     </PropertyGroup>
 
     <ItemGroup>
