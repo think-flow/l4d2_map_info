@@ -1,0 +1,12 @@
+[package]
+name = "map_info"
+version = "0.1.2"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.99"
+crossterm = "0.29.0"
+libloading = "0.8.9"
+regex = {version = "1.11.2", default-features = false,features = ["unicode"]}
+trie-rs = "0.4.2"
+unicase = "2.8.1"

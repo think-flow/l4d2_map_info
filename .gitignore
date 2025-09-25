@@ -1,0 +1,11 @@
+cli/target/
+cli/VpkInfo.dll/
+
+
+lib/bin/
+lib/obj/
+lib/packages/
+lib/riderModule.iml
+lib/_ReSharper.Caches/
+lib/.idea/
+lib/Lib.sln.DotSettings.user
