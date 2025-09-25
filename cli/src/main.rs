@@ -668,6 +668,12 @@ fn main() -> AnyResult<()> {
                 e
             });
         }
+        3 => {
+            return mode_3().map_err(|e| {
+                close_screen();
+                e
+            });
+        }
         _ => bail!("无效的模式"),
     }
 }
@@ -689,10 +695,12 @@ fn close_screen() {
 }
 
 fn chose_search_mode() -> AnyResult<u32> {
-    execute!(
-        stdout(),
-        Print("请选择查询模式：\n1. 根据文件查询地图信息\n2. 根据建图代码查询地图信息\n> ")
-    )?;
+    let hint = r#"请选择查询模式：
+1. 根据文件查询地图信息
+2. 根据建图代码查询地图信息
+3. 查找重复地图代码的文件
+> "#;
+    execute!(stdout(), Print(hint))?;
     let result: u32 = loop {
         match read()? {
             Event::Key(event) => {
@@ -710,6 +718,10 @@ fn chose_search_mode() -> AnyResult<u32> {
                         KeyCode::Char('2') => {
                             execute!(stdout(), Print("2"))?;
                             break 2;
+                        }
+                        KeyCode::Char('3') => {
+                            execute!(stdout(), Print("3"))?;
+                            break 3;
                         }
                         _ => continue,
                     }
@@ -895,6 +907,93 @@ fn mode_2() -> AnyResult<()> {
             _ => continue,
         }
     }
+}
+
+fn mode_3() -> AnyResult<()> {
+    let mut current_dir = std::env::current_dir()?;
+    if cfg!(debug_assertions) {
+        current_dir = PathBuf::from(
+            r"C:\Program Files (x86)\Steam\steamapps\common\Left 4 Dead 2\left4dead2\addons",
+        );
+    }
+
+    let regex = Regex::new(r#"(?i)"map"\s*"([^"]+)""#).map_err(|e| anyhow!(e))?;
+    let mut map_code_map: HashMap<String, HashSet<String>> = HashMap::new();
+
+    let instant = std::time::Instant::now();
+    for entry in fs::read_dir(current_dir)? {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(_) => {
+                // eprintln!("警告: 忽略无法访问的目录项: {}", e);
+                continue;
+            }
+        };
+
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+
+        execute!(
+            stdout(),
+            Clear(ClearType::CurrentLine),
+            MoveToColumn(0),
+            Print(format!("正在分析: {}", path.display())),
+        )
+        .unwrap();
+
+        //path 扩展名不为 .vpk则忽略
+        if path.extension().unwrap_or_default() != "vpk" {
+            continue;
+        }
+        if let Ok(vpk_info) = VPKInfo::new(&path) {
+            if let Ok(mission) = vpk_info.get_mission() {
+                let map_list = extract_coop_maps(&mission, &regex);
+                for map_code in map_list {
+                    let entry = map_code_map
+                        .entry(map_code.to_owned())
+                        .or_insert(HashSet::new());
+                    entry.insert(
+                        path.file_name()
+                            .unwrap_or_default()
+                            .to_str()
+                            .unwrap_or_default()
+                            .to_owned(),
+                    );
+                }
+            }
+        }
+    }
+
+    map_code_map.retain(|_, v| v.len() > 1);
+
+    let mut msg = String::new();
+    let set = map_code_map
+        .values()
+        .map(|v| {
+            let mut tmp = v.iter().map(|v| v.to_owned()).collect::<Vec<_>>();
+            tmp.sort();
+            tmp.join(",")
+        })
+        .collect::<HashSet<_>>();
+
+    let past_time = instant.elapsed();
+
+    if set.is_empty() {
+        msg.push_str("没有找到重复的地图文件");
+    } else {
+        msg.push_str("找到以下地图代码相同的文件组：\n");
+        for (i, str) in set.iter().enumerate() {
+            msg.push_str(format!("\n组 {}:\n", i + 1).as_str());
+            let file_list: Vec<&str> = str.split(",").collect();
+            for filepath in file_list {
+                msg.push_str(format!("  - {}\n", filepath).as_str());
+            }
+        }
+    }
+    msg.push_str(format!("\n耗时: {:.2}s", past_time.as_secs_f32()).as_str());
+    print_output(msg.as_str());
 }
 
 /// 提取 coop 下所有 Map 名称
