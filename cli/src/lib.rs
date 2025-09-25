@@ -11,7 +11,7 @@ pub struct VPKInfo {
 impl VPKInfo {
     pub fn new(path: impl AsRef<Path>) -> AnyResult<Self> {
         unsafe {
-            let lib = Library::new("Vpkinfo.dll")?;
+            let lib = Library::new("vpkinfo.dll")?;
             let path = CString::new(path.as_ref().to_str().unwrap())?;
 
             let create_vpk: Symbol<unsafe extern "C" fn(*const c_char) -> *mut c_void> =
