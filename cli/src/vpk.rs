@@ -8,40 +8,85 @@ use std::sync::LazyLock;
 static LIBRARY: LazyLock<Library> =
     LazyLock::new(|| unsafe { Library::new("vpkinfo.dll").expect("Failed to load vpkinfo.dll") });
 
-pub struct VPKInfo {
-    vpk_obj: *mut c_void,
-}
+/*
+* 外部函数列表
+* create_vpk
+* destroy_vpk
+* get_addoninfo_content_length
+* get_mission_content_length
+* get_addoninfo_content
+* get_mission_content
+*/
+static CREATE_VPK: LazyLock<Symbol<'static, unsafe extern "C" fn(*const c_char) -> *mut c_void>> =
+    LazyLock::new(|| unsafe {
+        LIBRARY
+            .get(b"create_vpk")
+            .expect("Failed to load create_vpk function")
+    });
+
+static DESTROY_VPK: LazyLock<Symbol<'static, unsafe extern "C" fn(*mut c_void)>> =
+    LazyLock::new(|| unsafe {
+        LIBRARY
+            .get(b"destroy_vpk")
+            .expect("Failed to load destroy_vpk function")
+    });
+
+static GET_ADDONINFO_CONTENT_LENGTH: LazyLock<
+    Symbol<'static, unsafe extern "C" fn(*mut c_void) -> c_uint>,
+> = LazyLock::new(|| unsafe {
+    LIBRARY
+        .get(b"get_addoninfo_content_length")
+        .expect("Failed to load get_addoninfo_content_length function")
+});
+
+static GET_MISSION_CONTENT_LENGTH: LazyLock<
+    Symbol<'static, unsafe extern "C" fn(*mut c_void) -> c_uint>,
+> = LazyLock::new(|| unsafe {
+    LIBRARY
+        .get(b"get_mission_content_length")
+        .expect("Failed to load get_mission_content_length function")
+});
+
+static GET_ADDONINFO_CONTENT: LazyLock<
+    Symbol<'static, unsafe extern "C" fn(*mut c_void, *mut u8, c_int) -> c_int>,
+> = LazyLock::new(|| unsafe {
+    LIBRARY
+        .get(b"get_addoninfo_content")
+        .expect("Failed to load get_addoninfo_content function")
+});
+
+static GET_MISSION_CONTENT: LazyLock<
+    Symbol<'static, unsafe extern "C" fn(*mut c_void, *mut u8, c_int) -> c_int>,
+> = LazyLock::new(|| unsafe {
+    LIBRARY
+        .get(b"get_mission_content")
+        .expect("Failed to load get_mission_content function")
+});
+
+pub struct VPKInfo(*mut c_void);
 
 impl VPKInfo {
     pub fn new(path: impl AsRef<Path>) -> AnyResult<Self> {
         unsafe {
             let path = CString::new(path.as_ref().to_str().unwrap())?;
-            let create_vpk: Symbol<unsafe extern "C" fn(*const c_char) -> *mut c_void> =
-                LIBRARY.get(b"create_vpk")?;
-            let vpk = create_vpk(path.as_ptr());
+            let vpk = CREATE_VPK(path.as_ptr());
             if vpk.is_null() {
                 bail!("Failed to create vpk object");
             }
 
-            Ok(Self { vpk_obj: vpk })
+            Ok(Self(vpk))
         }
     }
 
     pub fn get_addoninfo(&self) -> AnyResult<String> {
         unsafe {
-            let get_addoninfo_content_length: Symbol<unsafe extern "C" fn(*mut c_void) -> c_uint> =
-                LIBRARY.get(b"get_addoninfo_content_length")?;
-            let get_addoninfo_content: Symbol<
-                unsafe extern "C" fn(*mut c_void, *mut u8, c_int) -> c_int,
-            > = LIBRARY.get(b"get_addoninfo_content")?;
-
-            let length = get_addoninfo_content_length(self.vpk_obj);
+            let length = GET_ADDONINFO_CONTENT_LENGTH(self.0);
             if length == 0 {
                 return Ok("".to_string());
             }
 
             let mut buf = vec![0u8; length as usize];
-            let copied = get_addoninfo_content(self.vpk_obj, buf.as_mut_ptr(), buf.len() as c_int);
+            let copied = GET_ADDONINFO_CONTENT(self.0, buf.as_mut_ptr(), buf.len() as c_int);
 
             if copied <= 0 {
                 match copied {
@@ -59,19 +104,13 @@ impl VPKInfo {
 
     pub fn get_mission(&self) -> AnyResult<String> {
         unsafe {
-            let get_mission_content_length: Symbol<unsafe extern "C" fn(*mut c_void) -> c_uint> =
-                LIBRARY.get(b"get_mission_content_length")?;
-            let get_mission_content: Symbol<
-                unsafe extern "C" fn(*mut c_void, *mut u8, c_int) -> c_int,
-            > = LIBRARY.get(b"get_mission_content")?;
-
-            let length = get_mission_content_length(self.vpk_obj);
+            let length = GET_MISSION_CONTENT_LENGTH(self.0);
             if length == 0 {
                 return Ok("".to_string());
             }
 
             let mut buf = vec![0u8; length as usize];
-            let copied = get_mission_content(self.vpk_obj, buf.as_mut_ptr(), buf.len() as c_int);
+            let copied = GET_MISSION_CONTENT(self.0, buf.as_mut_ptr(), buf.len() as c_int);
 
             if copied <= 0 {
                 match copied {
@@ -91,11 +130,7 @@ impl VPKInfo {
 impl Drop for VPKInfo {
     fn drop(&mut self) {
         unsafe {
-            if let Ok(destroy_vpk) =
-                LIBRARY.get::<unsafe extern "C" fn(*mut c_void)>(b"destroy_vpk")
-            {
-                destroy_vpk(self.vpk_obj);
-            }
+            DESTROY_VPK(self.0);
         }
     }
 }
