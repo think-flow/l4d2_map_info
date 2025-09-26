@@ -8,8 +8,7 @@ use std::{
     io::stdout,
     path::PathBuf,
 };
-use trie_rs::{Trie, TrieBuilder};
-use unicase::UniCase;
+use strsim::{jaro_winkler, levenshtein};
 
 /// 保留行数， 1行提示，1行输入，1行页码输出
 const RESERVED_ROWS: u16 = 3;
@@ -19,14 +18,12 @@ struct Mode1State {
     input_buffer: VecDeque<char>,
     /// 用于存储输出区域的光标起始位置
     input_cursor_pos: (u16, u16),
-    /// 用于存储Trie树
-    trie: Trie<u8>,
     /// 当前选中项的索引（-1为未选中）
     selected_index: i32,
     /// 匹配到的文件列表 (None和Vec.len =0 时为空)
     matched_file_list: Option<Vec<String>>,
     /// 文件名到文件路径的映射
-    file_map: HashMap<UniCase<String>, PathBuf>,
+    file_map: HashMap<String, PathBuf>,
     /// 列表偏移量
     page_offset: usize,
     /// 列表大小
@@ -39,8 +36,6 @@ struct Mode2State {
     input_buffer: VecDeque<char>,
     /// 用于存储输出区域的光标起始位置
     input_cursor_pos: (u16, u16),
-    /// 用于存储Trie树
-    trie: Trie<u8>,
     /// 当前选中项的索引（-1为未选中）
     selected_index: i32,
     /// 1. code模式 2. file模式
@@ -104,7 +99,7 @@ impl Mode1State {
                 */
                 let path = self
                     .file_map
-                    .get(&UniCase::new(path.clone()))
+                    .get(&path)
                     .ok_or(anyhow!("路径{}不存在", path))?;
 
                 let vpk_info = VPKInfo::new(path)?;
@@ -181,17 +176,24 @@ impl Mode1State {
         if input.is_empty() {
             self.matched_file_list = None;
         } else {
-            let mut matched_file: Vec<String> =
-                self.trie.predictive_search(&input.to_lowercase()).collect();
-            for val in matched_file.iter_mut() {
-                *val = self
-                    .file_map
-                    .entry(UniCase::new(val.to_owned()))
-                    .key()
-                    .to_string();
-            }
-            matched_file.sort(); //如果不区分大小写，那就排个序吧 大写排前
-            self.matched_file_list = Some(matched_file);
+            // 获取阈值
+            let threshold = dyn_threadhold(&input);
+
+            let mut matched_files: Vec<(String, f64)> = self
+                .file_map
+                .keys()
+                .flat_map(|file_name| {
+                    let score = score_keyword(&input, file_name);
+                    if score >= threshold {
+                        Some((file_name.to_owned(), score))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            matched_files.sort_by(|a, b| b.1.total_cmp(&a.1));
+
+            self.matched_file_list = Some(matched_files.into_iter().map(|v| v.0).collect());
         }
     }
 
@@ -494,8 +496,24 @@ impl Mode2State {
         if input.is_empty() {
             self.matched_code_list = None;
         } else {
-            let matched_code: Vec<String> = self.trie.predictive_search(&input).collect();
-            self.matched_code_list = Some(matched_code);
+            // 获取阈值
+            let threshold = dyn_threadhold(&input);
+
+            let mut matched_codes: Vec<(String, f64)> = self
+                .code_map
+                .keys()
+                .flat_map(|code| {
+                    let score = score_keyword(&input, code);
+                    if score >= threshold {
+                        Some((code.to_owned(), score))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            matched_codes.sort_by(|a, b| b.1.total_cmp(&a.1));
+
+            self.matched_code_list = Some(matched_codes.into_iter().map(|v| v.0).collect());
         }
     }
 
@@ -763,18 +781,9 @@ fn mode_1() -> AnyResult<()> {
                 return None;
             }
 
-            Some((
-                UniCase::new(path.file_name().unwrap().to_str().unwrap().to_owned()),
-                path,
-            ))
+            Some((path.file_name().unwrap().to_str().unwrap().to_owned(), path))
         })
         .collect::<HashMap<_, _>>();
-
-    // 构建Trie树 用于前缀匹配
-    let mut builder = TrieBuilder::new();
-    for file_name in files.keys() {
-        builder.push(file_name.to_lowercase());
-    }
 
     // 计算page_size
     let terminal_size = size()?;
@@ -789,7 +798,6 @@ fn mode_1() -> AnyResult<()> {
     let mut state = Mode1State {
         input_buffer: VecDeque::new(),
         input_cursor_pos: position()?,
-        trie: builder.build(),
         selected_index: -1,
         matched_file_list: None,
         file_map: files,
@@ -854,14 +862,11 @@ fn mode_2() -> AnyResult<()> {
         })
         .collect::<HashMap<_, _>>();
 
-    // Trie树 用于前缀匹配
-    let mut builder = TrieBuilder::new();
     let mut map_code_map: HashMap<String, HashSet<String>> = HashMap::new();
     let regex = Regex::new(r#"(?i)"map"\s*"([^"]+)""#).map_err(|e| anyhow!(e))?;
     for (file_name, content) in files.iter() {
         let map_list = extract_coop_maps(content, &regex);
         for map_code in map_list {
-            builder.push(map_code);
             let entry = map_code_map
                 .entry(map_code.to_owned())
                 .or_insert(HashSet::new());
@@ -882,7 +887,6 @@ fn mode_2() -> AnyResult<()> {
     let mut state = Mode2State {
         input_buffer: VecDeque::new(),
         input_cursor_pos: position()?,
-        trie: builder.build(),
         selected_index: -1,
         file_map: files,
         code_map: map_code_map,
@@ -1013,4 +1017,38 @@ fn print_output(output: &str) -> ! {
     let mut buf = String::new();
     std::io::stdin().read_line(&mut buf).unwrap();
     std::process::exit(0);
+}
+
+/// 给定关键字和文本，返回一个相似度分数（0.0 ~ 1.0）
+fn score_keyword(keyword: &str, txt: &str) -> f64 {
+    let keyword_lower = keyword.to_lowercase();
+    let txt_lower = txt.to_lowercase();
+
+    // 子串命中直接加权（最高优先）
+    if txt_lower.contains(&keyword_lower) {
+        return 1.0;
+    }
+
+    // 计算 jaro-winkler 相似度
+    let jw_score = jaro_winkler(&txt_lower, &keyword_lower);
+
+    // 计算 Levenshtein 距离，转成相似度
+    let max_len = txt_lower.len().max(keyword_lower.len());
+    let lev_dist = levenshtein(&txt_lower, &keyword_lower);
+    let lev_score = 1.0 - (lev_dist as f64 / max_len as f64);
+
+    // 这里我们取平均分（可以调整权重）
+    (jw_score + lev_score) / 2.0
+}
+
+/// 根据输出字符串，获得阈值
+fn dyn_threadhold(keyword: &str) -> f64 {
+    let input_len = keyword.chars().count();
+    let mut threshold = 0.5;
+    if input_len <= 4 {
+        threshold = 0.1 * input_len as f64;
+    } else if input_len >= 8 {
+        threshold = 0.8;
+    }
+    threshold
 }
