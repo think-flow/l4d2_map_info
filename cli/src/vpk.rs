@@ -63,6 +63,7 @@ static GET_MISSION_CONTENT: LazyLock<
         .expect("Failed to load get_mission_content function")
 });
 
+#[derive(Debug)]
 pub struct VPKInfo(*mut c_void);
 
 impl VPKInfo {
@@ -78,16 +79,18 @@ impl VPKInfo {
         }
     }
 
-    pub fn get_addoninfo(&self) -> AnyResult<String> {
+    fn get_content(
+        &self,
+        len_fn: &Symbol<'static, unsafe extern "C" fn(*mut c_void) -> c_uint>,
+        content_fn: &Symbol<'static, unsafe extern "C" fn(*mut c_void, *mut u8, c_int) -> c_int>,
+    ) -> AnyResult<String> {
         unsafe {
-            let length = GET_ADDONINFO_CONTENT_LENGTH(self.0);
+            let length = len_fn(self.0);
             if length == 0 {
                 return Ok("".to_string());
             }
-
             let mut buf = vec![0u8; length as usize];
-            let copied = GET_ADDONINFO_CONTENT(self.0, buf.as_mut_ptr(), buf.len() as c_int);
-
+            let copied = content_fn(self.0, buf.as_mut_ptr(), buf.len() as c_int);
             if copied <= 0 {
                 match copied {
                     0 => return Ok("".to_string()),
@@ -97,33 +100,16 @@ impl VPKInfo {
                     _ => bail!("unknown error"),
                 }
             }
-
             Ok(String::from_utf8_lossy(&buf[..copied as usize]).into_owned())
         }
     }
 
+    pub fn get_addoninfo(&self) -> AnyResult<String> {
+        self.get_content(&*GET_ADDONINFO_CONTENT_LENGTH, &*GET_ADDONINFO_CONTENT)
+    }
+
     pub fn get_mission(&self) -> AnyResult<String> {
-        unsafe {
-            let length = GET_MISSION_CONTENT_LENGTH(self.0);
-            if length == 0 {
-                return Ok("".to_string());
-            }
-
-            let mut buf = vec![0u8; length as usize];
-            let copied = GET_MISSION_CONTENT(self.0, buf.as_mut_ptr(), buf.len() as c_int);
-
-            if copied <= 0 {
-                match copied {
-                    0 => return Ok("".to_string()),
-                    -1 => bail!("handle is null"),
-                    -2 => bail!("buffer is null"),
-                    -3 => bail!("buffer size is too small"),
-                    _ => bail!("unknown error"),
-                }
-            }
-
-            Ok(String::from_utf8_lossy(&buf[..copied as usize]).into_owned())
-        }
+        self.get_content(&*GET_MISSION_CONTENT_LENGTH, &*GET_MISSION_CONTENT)
     }
 }
 
@@ -134,3 +120,5 @@ impl Drop for VPKInfo {
         }
     }
 }
+
+unsafe impl Send for VPKInfo {}
