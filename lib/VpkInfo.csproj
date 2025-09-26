@@ -5,13 +5,49 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AssemblyName>vpkinfo</AssemblyName>
+
+        <!-- NativeAOT + 最小体积优先 -->
         <PublishAot>true</PublishAot>
         <PublishTrimmed>true</PublishTrimmed>
         <TrimMode>Link</TrimMode>
+        <OptimizationPreference>Size</OptimizationPreference>
+        <IlcOptimizationPreference>Size</IlcOptimizationPreference>
+        <IlcLinkerOptimizationPreference>Size</IlcLinkerOptimizationPreference>
+
+        <!-- 去掉调试相关 -->
+        <DebugType>none</DebugType>
+        <DebugSymbols>false</DebugSymbols>
+        <TrimmerRemoveSymbols>true</TrimmerRemoveSymbols>
+        <StripSymbols>true</StripSymbols>
+
+        <!-- 去掉栈追踪/调试支持 -->
+        <IlcGenerateStackTraceData>false</IlcGenerateStackTraceData>
+        <StackTraceSupport>false</StackTraceSupport>
+        <DebuggerSupport>false</DebuggerSupport>
+
+        <!-- 去掉反射、元数据 -->
+        <ReflectionMetadata>false</ReflectionMetadata>
+        <IlcDisableReflection>true</IlcDisableReflection>
+        <MetadataUpdaterSupport>false</MetadataUpdaterSupport>
+        <IlcGenerateCompleteTypeMetadata>false</IlcGenerateCompleteTypeMetadata>
+        <IlcGenerateMethodBodies>false</IlcGenerateMethodBodies>
+
+        <!-- 去掉不必要的 BCL 支持 -->
+        <HttpClientSupport>false</HttpClientSupport>
+        <JsonSerializerSupport>None</JsonSerializerSupport>
+        <UseNativeHttpHandler>true</UseNativeHttpHandler>
+        <ThreadPoolSupport>false</ThreadPoolSupport>
+
+        <!-- 体积优化 -->
+        <EventSourceSupport>false</EventSourceSupport>
+        <InvariantGlobalization>true</InvariantGlobalization>
+        <EnableUnsafeUTF7Encoding>false</EnableUnsafeUTF7Encoding>
+        <UseSystemResourceKeys>true</UseSystemResourceKeys>
+        <IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="ValvePak" Version="3.0.3.132" />
+        <PackageReference Include="ValvePak" Version="3.0.3.132" />
     </ItemGroup>
 
 </Project>
