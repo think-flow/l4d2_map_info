@@ -1,6 +1,6 @@
 use anyhow::{Result as AnyResult, anyhow, bail};
 use crossterm::{cursor::*, event::*, execute, style::*, terminal::*};
-use map_info::*;
+use map_info::vpk::*;
 use regex::bytes::Regex;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
