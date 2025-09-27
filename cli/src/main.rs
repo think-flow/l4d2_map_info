@@ -1,7 +1,7 @@
 use anyhow::{Result as AnyResult, anyhow, bail};
 use crossterm::{cursor::*, event::*, execute, style::*, terminal::*};
 use map_info::vpk::*;
-use regex::bytes::Regex;
+use regex_lite::Regex;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     fs,
@@ -1003,10 +1003,8 @@ fn mode_3() -> AnyResult<()> {
 /// 提取 coop 下所有 Map 名称
 fn extract_coop_maps<'a>(text: &'a str, regex: &Regex) -> Vec<&'a str> {
     let mut results = Vec::new();
-    for cap in regex.captures_iter(text.as_bytes()) {
-        if let Ok(str) = std::str::from_utf8(cap.get(1).unwrap().as_bytes()) {
-            results.push(str);
-        }
+    for cap in regex.captures_iter(text) {
+        results.push(cap.get(1).unwrap().as_str());
     }
     results
 }
