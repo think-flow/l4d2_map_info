@@ -70,19 +70,19 @@ public static class NativeExports
     private static string _lastErrMsg = string.Empty;
 
     [UnmanagedCallersOnly(EntryPoint = "GetLastErrorMessage")]
-    public static unsafe void* GetLastErrorMessage() => Marshal.StringToCoTaskMemUTF8(_lastErrMsg).ToPointer();
+    public static unsafe byte* GetLastErrorMessage() => StringToNativeMemUTF8(_lastErrMsg);
 
     [UnmanagedCallersOnly(EntryPoint = "FreeString")]
-    public static unsafe void FreeString(void* strPtr) => Marshal.FreeCoTaskMem((nint) strPtr);
+    public static unsafe void FreeString(byte* strPtr) => NativeMemory.Free(strPtr);
 
     // 返回值为-1 有错误
     [UnmanagedCallersOnly(EntryPoint = "CreateVpk")]
-    public static unsafe int CreateVpk(void* pathPtr, void** handle)
+    public static unsafe int CreateVpk(byte* pathPtr, void** handle)
     {
         *handle = (void*) 0;
         try
         {
-            if (pathPtr == (void*) 0)
+            if (pathPtr == (byte*) 0)
             {
                 throw new Exception("path ptr is not zero");
             }
@@ -104,29 +104,20 @@ public static class NativeExports
     {
         if (handle == (void*) 0) return;
         var gch = GCHandle.FromIntPtr((nint) handle);
-        if (gch.Target is IDisposable dis)
-        {
-            dis.Dispose();
-        }
-
+        ((Vpk) gch.Target!).Dispose();
         gch.Free();
     }
 
     // 返回值为-1 有错误  *contentPtr 为0时  文件不存在
     [UnmanagedCallersOnly(EntryPoint = "GetMissionContent")]
-    public static unsafe int GetMissionContent(void* handle, void** contentPtr)
+    public static unsafe int GetMissionContent(void* handle, byte** contentPtr)
     {
-        *contentPtr = (void*) 0;
+        *contentPtr = (byte*) 0;
         try
         {
-            if (handle == (void*) 0)
-            {
-                throw new Exception("handle is not zero");
-            }
-
-            var vpk = (Vpk) GCHandle.FromIntPtr((nint) handle).Target!;
+            var vpk = HandleToVpk(handle);
             string? content = vpk.GetMissionContent();
-            *contentPtr = Marshal.StringToCoTaskMemUTF8(content).ToPointer();
+            *contentPtr = StringToNativeMemUTF8(content);
             return 0;
         }
         catch (Exception e)
@@ -138,19 +129,14 @@ public static class NativeExports
 
     // 返回值为-1 有错误  *contentPtr 为0时 文件不存在
     [UnmanagedCallersOnly(EntryPoint = "GetAddonInfoContent")]
-    public static unsafe int GetAddonInfoContent(void* handle, void** contentPtr)
+    public static unsafe int GetAddonInfoContent(void* handle, byte** contentPtr)
     {
-        *contentPtr = (void*) 0;
+        *contentPtr = (byte*) 0;
         try
         {
-            if (handle == (void*) 0)
-            {
-                throw new Exception("handle is not zero");
-            }
-
-            var vpk = (Vpk) GCHandle.FromIntPtr((nint) handle).Target!;
+            var vpk = HandleToVpk(handle);
             string? content = vpk.GetAddonInfoContent();
-            *contentPtr = Marshal.StringToCoTaskMemUTF8(content).ToPointer();
+            *contentPtr = StringToNativeMemUTF8(content);
             return 0;
         }
         catch (Exception e)
@@ -158,5 +144,26 @@ public static class NativeExports
             _lastErrMsg = e.Message;
             return -1;
         }
+    }
+
+    // ReSharper disable once InconsistentNaming
+    private static unsafe byte* StringToNativeMemUTF8(string? s)
+    {
+        if (s is null) return (byte*) 0;
+        int maxByteCount = Encoding.UTF8.GetMaxByteCount(s.Length);
+        byte* pointer = (byte*) NativeMemory.Alloc((nuint) checked(maxByteCount + 1));
+        int bytes = Encoding.UTF8.GetBytes(s.AsSpan(), new Span<byte>(pointer, maxByteCount));
+        pointer[bytes] = 0;
+        return pointer;
+    }
+
+    private static unsafe Vpk HandleToVpk(void* handle)
+    {
+        if (handle == (void*) 0)
+        {
+            throw new Exception("handle is not zero");
+        }
+
+        return (Vpk) GCHandle.FromIntPtr((nint) handle).Target!;
     }
 }
