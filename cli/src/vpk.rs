@@ -1,15 +1,32 @@
 use anyhow::{Result as AnyResult, bail};
-use std::ffi::{CString, c_char, c_int, c_uint, c_void};
+use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::path::Path;
+use std::ptr::{self, null_mut};
 
 #[link(name = "vpkinfo", kind = "raw-dylib")]
 unsafe extern "C" {
-    fn create_vpk(path: *const c_char) -> *mut c_void;
-    fn destroy_vpk(handle: *mut c_void);
-    fn get_addoninfo_content_length(handle: *mut c_void) -> c_uint;
-    fn get_mission_content_length(handle: *mut c_void) -> c_uint;
-    fn get_addoninfo_content(handle: *mut c_void, buffer: *mut u8, buffer_size: c_int) -> c_int;
-    fn get_mission_content(handle: *mut c_void, buffer: *mut u8, buffer_size: c_int) -> c_int;
+    #[link_name = "FreeString"]
+    unsafe fn free_string(string: *const c_char);
+    #[link_name = "GetLastErrorMessage"]
+    unsafe fn get_last_error_message() -> *mut c_char;
+    #[link_name = "CreateVpk"]
+    unsafe fn create_vpk(path: *const c_char, handle: *mut *mut c_void) -> c_int;
+    #[link_name = "DestroyVpk"]
+    unsafe fn destroy_vpk(handle: *mut c_void);
+    #[link_name = "GetAddonInfoContent"]
+    unsafe fn get_addoninfo_content(handle: *mut c_void, content: *mut *mut c_char) -> c_int;
+    #[link_name = "GetMissionContent"]
+    unsafe fn get_mission_content(handle: *mut c_void, content: *mut *mut c_char) -> c_int;
+}
+
+/// 该函数会调用free_string释放c_str
+fn cstr_to_string(c_str: *const c_char) -> String {
+    unsafe {
+        let str = CStr::from_ptr(c_str).to_string_lossy().into_owned();
+        // 释放c_str资源
+        free_string(c_str);
+        str
+    }
 }
 
 #[derive(Debug)]
@@ -18,42 +35,51 @@ pub struct VPKInfo(*mut c_void);
 impl VPKInfo {
     pub fn new(path: impl AsRef<Path>) -> AnyResult<Self> {
         let path = CString::new(path.as_ref().to_str().unwrap())?;
-        let vpk = unsafe { create_vpk(path.as_ptr()) };
-        if vpk.is_null() {
+        let mut handle: *mut c_void = ptr::null_mut();
+        let result = unsafe { create_vpk(path.as_ptr(), &mut handle as *mut _) };
+        if result != 0 {
+            let err_msg = VPKInfo::get_last_error_message();
+            bail!(err_msg);
+        }
+        if handle == ptr::null_mut() {
             bail!("Failed to create vpk object");
         }
-        Ok(Self(vpk))
+        Ok(Self(handle))
     }
 
-    fn get_content(
-        &self,
-        len_fn: unsafe extern "C" fn(*mut c_void) -> c_uint,
-        content_fn: unsafe extern "C" fn(*mut c_void, *mut u8, c_int) -> c_int,
-    ) -> AnyResult<String> {
-        let length = unsafe { len_fn(self.0) };
-        if length == 0 {
-            return Ok("".to_string());
-        }
-        let mut buf = vec![0u8; length as usize];
-        let copied = unsafe { content_fn(self.0, buf.as_mut_ptr(), buf.len() as c_int) };
-        if copied <= 0 {
-            match copied {
-                0 => return Ok("".to_string()),
-                -1 => bail!("handle is null"),
-                -2 => bail!("buffer is null"),
-                -3 => bail!("buffer size is too small"),
-                _ => bail!("unknown error"),
-            }
-        }
-        Ok(String::from_utf8_lossy(&buf[..copied as usize]).into_owned())
+    fn get_last_error_message() -> String {
+        let ptr = unsafe { get_last_error_message() };
+        cstr_to_string(ptr)
     }
 
     pub fn get_addoninfo(&self) -> AnyResult<String> {
-        self.get_content(get_addoninfo_content_length, get_addoninfo_content)
+        let mut content_ptr: *mut c_char = null_mut();
+        let result = unsafe { get_addoninfo_content(self.0, &mut content_ptr) };
+        if result != 0 {
+            let err_msg = VPKInfo::get_last_error_message();
+            bail!(err_msg);
+        }
+        if content_ptr == ptr::null_mut() {
+            bail!("该文件没有addoninfo信息");
+        }
+
+        let content = cstr_to_string(content_ptr);
+        Ok(content)
     }
 
     pub fn get_mission(&self) -> AnyResult<String> {
-        self.get_content(get_mission_content_length, get_mission_content)
+        let mut content_ptr: *mut c_char = null_mut();
+        let result = unsafe { get_mission_content(self.0, &mut content_ptr) };
+        if result != 0 {
+            let err_msg = VPKInfo::get_last_error_message();
+            bail!(err_msg);
+        }
+        if content_ptr == ptr::null_mut() {
+            bail!("该文件没有misson信息");
+        }
+
+        let content = cstr_to_string(content_ptr);
+        Ok(content)
     }
 }
 

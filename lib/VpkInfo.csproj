@@ -5,6 +5,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AssemblyName>vpkinfo</AssemblyName>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
         <!-- NativeAOT + 最小体积优先 -->
         <PublishAot>true</PublishAot>
@@ -47,7 +48,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="ValvePak" Version="3.0.3.132" />
+        <PackageReference Include="ValvePak" Version="3.0.3.132"/>
     </ItemGroup>
 
 </Project>

@@ -1,6 +1,5 @@
-﻿using System.Buffers;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
+using System.Text;
 using SteamDatabase.ValvePak;
 
 namespace VpkInfo;
@@ -10,9 +9,9 @@ namespace VpkInfo;
  */
 public class Vpk : IDisposable
 {
-    private readonly Package _package;
-    private readonly PackageEntry? _missionEntry;
     private readonly PackageEntry? _addoninfoEntry;
+    private readonly PackageEntry? _missionEntry;
+    private readonly Package _package;
 
     public Vpk(string path)
     {
@@ -46,44 +45,65 @@ public class Vpk : IDisposable
         }
     }
 
-    public uint GetMissionContentLength() => _missionEntry?.Length ?? 0;
-
-    public uint GetAddonInfoContentLength() => _addoninfoEntry?.Length ?? 0;
-
-    public void GetMissionContent(byte[] buffer)
-    {
-        if (_missionEntry is null) return;
-        _package.ReadEntry(_missionEntry, buffer, false);
-    }
-
-    public void GetAddonInfoContent(byte[] buffer)
-    {
-        if (_addoninfoEntry is null) return;
-        _package.ReadEntry(_addoninfoEntry, buffer, false);
-    }
-
     public void Dispose()
     {
         _package.Dispose();
+    }
+
+    public string? GetMissionContent()
+    {
+        if (_missionEntry is null) return null;
+        _package.ReadEntry(_missionEntry, out byte[] buffer, false);
+        return Encoding.UTF8.GetString(buffer);
+    }
+
+    public string? GetAddonInfoContent()
+    {
+        if (_addoninfoEntry is null) return null;
+        _package.ReadEntry(_addoninfoEntry, out byte[] buffer, false);
+        return Encoding.UTF8.GetString(buffer);
     }
 }
 
 public static class NativeExports
 {
-    [UnmanagedCallersOnly(EntryPoint = "create_vpk", CallConvs = [typeof(CallConvCdecl)])]
-    public static nint CreateVpk(nint pathPtr)
+    private static string _lastErrMsg = string.Empty;
+
+    [UnmanagedCallersOnly(EntryPoint = "GetLastErrorMessage")]
+    public static unsafe void* GetLastErrorMessage() => Marshal.StringToCoTaskMemUTF8(_lastErrMsg).ToPointer();
+
+    [UnmanagedCallersOnly(EntryPoint = "FreeString")]
+    public static unsafe void FreeString(void* strPtr) => Marshal.FreeCoTaskMem((nint) strPtr);
+
+    // 返回值为-1 有错误
+    [UnmanagedCallersOnly(EntryPoint = "CreateVpk")]
+    public static unsafe int CreateVpk(void* pathPtr, void** handle)
     {
-        string path = Marshal.PtrToStringUTF8(pathPtr)!;
-        var vpk = new Vpk(path);
-        GCHandle handle = GCHandle.Alloc(vpk);
-        return (nint) handle;
+        *handle = (void*) 0;
+        try
+        {
+            if (pathPtr == (void*) 0)
+            {
+                throw new Exception("path ptr is not zero");
+            }
+
+            string path = Marshal.PtrToStringUTF8((nint) pathPtr)!;
+            var vpk = new Vpk(path);
+            *handle = GCHandle.ToIntPtr(GCHandle.Alloc(vpk)).ToPointer();
+            return 0;
+        }
+        catch (Exception e)
+        {
+            _lastErrMsg = e.Message;
+            return -1;
+        }
     }
 
-    [UnmanagedCallersOnly(EntryPoint = "destroy_vpk", CallConvs = [typeof(CallConvCdecl)])]
-    public static void DestroyVpk(nint handle)
+    [UnmanagedCallersOnly(EntryPoint = "DestroyVpk")]
+    public static unsafe void DestroyVpk(void* handle)
     {
-        if (handle == nint.Zero) return;
-        var gch = (GCHandle) handle;
+        if (handle == (void*) 0) return;
+        var gch = GCHandle.FromIntPtr((nint) handle);
         if (gch.Target is IDisposable dis)
         {
             dis.Dispose();
@@ -92,47 +112,51 @@ public static class NativeExports
         gch.Free();
     }
 
-    [UnmanagedCallersOnly(EntryPoint = "get_mission_content_length", CallConvs = [typeof(CallConvCdecl)])]
-    public static uint GetMissionContentLength(nint handle) => handle.ToVpk().GetMissionContentLength();
-
-    [UnmanagedCallersOnly(EntryPoint = "get_addoninfo_content_length", CallConvs = [typeof(CallConvCdecl)])]
-    public static uint GetAddonInfoContentLength(nint handle) => handle.ToVpk().GetAddonInfoContentLength();
-
-    [UnmanagedCallersOnly(EntryPoint = "get_mission_content", CallConvs = [typeof(CallConvCdecl)])]
-    public static int GetMissionContent(nint handle, nint buffer, int bufferSize)
+    // 返回值为-1 有错误  *contentPtr 为0时  文件不存在
+    [UnmanagedCallersOnly(EntryPoint = "GetMissionContent")]
+    public static unsafe int GetMissionContent(void* handle, void** contentPtr)
     {
-        if (handle == nint.Zero) return -1;
-        if (buffer == nint.Zero) return -2;
-        var vpk = handle.ToVpk();
-        int length = (int) vpk.GetMissionContentLength();
-        if (bufferSize < length) return -3; // 提供的缓冲区过小
-        byte[] bytes = ArrayPool<byte>.Shared.Rent(length);
-        vpk.GetMissionContent(bytes);
-        int toCopy = Math.Min(length, bufferSize);
-        Marshal.Copy(bytes, 0, buffer, toCopy);
-        ArrayPool<byte>.Shared.Return(bytes);
-        return toCopy;
+        *contentPtr = (void*) 0;
+        try
+        {
+            if (handle == (void*) 0)
+            {
+                throw new Exception("handle is not zero");
+            }
+
+            var vpk = (Vpk) GCHandle.FromIntPtr((nint) handle).Target!;
+            string? content = vpk.GetMissionContent();
+            *contentPtr = Marshal.StringToCoTaskMemUTF8(content).ToPointer();
+            return 0;
+        }
+        catch (Exception e)
+        {
+            _lastErrMsg = e.Message;
+            return -1;
+        }
     }
 
-    [UnmanagedCallersOnly(EntryPoint = "get_addoninfo_content", CallConvs = [typeof(CallConvCdecl)])]
-    public static int GetAddonInfoContent(nint handle, nint buffer, int bufferSize)
+    // 返回值为-1 有错误  *contentPtr 为0时 文件不存在
+    [UnmanagedCallersOnly(EntryPoint = "GetAddonInfoContent")]
+    public static unsafe int GetAddonInfoContent(void* handle, void** contentPtr)
     {
-        if (handle == nint.Zero) return -1;
-        if (buffer == nint.Zero) return -2;
-        var vpk = handle.ToVpk();
-        int length = (int) vpk.GetAddonInfoContentLength();
-        if (bufferSize < length) return -3; // 提供的缓冲区过小
-        byte[] bytes = ArrayPool<byte>.Shared.Rent(length);
-        vpk.GetAddonInfoContent(bytes);
-        int toCopy = Math.Min(length, bufferSize);
-        Marshal.Copy(bytes, 0, buffer, toCopy);
-        ArrayPool<byte>.Shared.Return(bytes);
-        return toCopy;
-    }
+        *contentPtr = (void*) 0;
+        try
+        {
+            if (handle == (void*) 0)
+            {
+                throw new Exception("handle is not zero");
+            }
 
-    private static Vpk ToVpk(this nint handle)
-    {
-        if (handle == nint.Zero) throw new ArgumentException("handle is zero");
-        return (Vpk) ((GCHandle) handle).Target!;
+            var vpk = (Vpk) GCHandle.FromIntPtr((nint) handle).Target!;
+            string? content = vpk.GetAddonInfoContent();
+            *contentPtr = Marshal.StringToCoTaskMemUTF8(content).ToPointer();
+            return 0;
+        }
+        catch (Exception e)
+        {
+            _lastErrMsg = e.Message;
+            return -1;
+        }
     }
 }
