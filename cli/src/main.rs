@@ -243,14 +243,14 @@ impl Mode1State {
                                 stdout(),
                                 Clear(ClearType::CurrentLine),
                                 SetAttribute(Attribute::Underlined),
-                                Print(format!("{}. {}\n", i + 1 + page_offset, file)),
+                                Print(format!("{}. {}\r\n", i + 1 + page_offset, file)),
                                 SetAttribute(Attribute::Reset),
                             )?;
                         } else {
                             execute!(
                                 stdout(),
                                 Clear(ClearType::CurrentLine),
-                                Print(format!("{}. {}\n", i + 1 + page_offset, file))
+                                Print(format!("{}. {}\r\n", i + 1 + page_offset, file))
                             )?;
                         }
                         count += 1;
@@ -266,7 +266,7 @@ impl Mode1State {
                     if count < self.terminal_size.1 {
                         let empty_str = " ".repeat(self.terminal_size.0 as usize);
                         for _ in 0..(self.terminal_size.1 - count - RESERVED_ROWS) {
-                            execute!(stdout(), Print(format!("\n{}", empty_str)))?;
+                            execute!(stdout(), Print(format!("\r\n{}", empty_str)))?;
                         }
                     }
 
@@ -555,7 +555,7 @@ impl Mode2State {
                                     Clear(ClearType::CurrentLine),
                                     SetAttribute(Attribute::Underlined),
                                     Print(format!(
-                                        "{}. {} => {}\n",
+                                        "{}. {} => {}\r\n",
                                         i + 1 + page_offset,
                                         code,
                                         Self::format_hash_set(file_list)
@@ -567,7 +567,7 @@ impl Mode2State {
                                     stdout(),
                                     Clear(ClearType::CurrentLine),
                                     Print(format!(
-                                        "{}. {} => {}\n",
+                                        "{}. {} => {}\r\n",
                                         i + 1 + page_offset,
                                         code,
                                         Self::format_hash_set(file_list)
@@ -587,7 +587,7 @@ impl Mode2State {
                         if count < self.terminal_size.1 {
                             let empty_str = " ".repeat(self.terminal_size.0 as usize);
                             for _ in 0..(self.terminal_size.1 - count - RESERVED_ROWS) {
-                                execute!(stdout(), Print(format!("\n{}", empty_str)))?;
+                                execute!(stdout(), Print(format!("\r\n{}", empty_str)))?;
                             }
                         }
 
@@ -617,13 +617,13 @@ impl Mode2State {
                             execute!(
                                 stdout(),
                                 SetAttribute(Attribute::Underlined),
-                                Print(format!("{}. {}\n", i + 1 + page_offset, code)),
+                                Print(format!("{}. {}\r\n", i + 1 + page_offset, code)),
                                 SetAttribute(Attribute::Reset),
                             )?;
                         } else {
                             execute!(
                                 stdout(),
-                                Print(format!("{}. {}\n", i + 1 + page_offset, code))
+                                Print(format!("{}. {}\r\n", i + 1 + page_offset, code))
                             )?;
                         }
                     }
@@ -713,12 +713,11 @@ fn close_screen() {
 }
 
 fn chose_search_mode() -> AnyResult<u32> {
-    let hint = r#"请选择查询模式：
-1. 根据文件查询地图信息
-2. 根据建图代码查询地图信息
-3. 查找重复地图代码的文件
-> "#;
-    execute!(stdout(), Print(hint))?;
+    execute!(stdout(), Print("请选择查询模式：\r\n"))?;
+    execute!(stdout(), Print("1. 根据文件查询地图信息\r\n"))?;
+    execute!(stdout(), Print("2. 根据建图代码查询地图信息\r\n"))?;
+    execute!(stdout(), Print("3. 查找重复地图代码的文件\r\n"))?;
+    execute!(stdout(), Print("> "))?;
     let result: u32 = loop {
         match read()? {
             Event::Key(event) => {
@@ -792,7 +791,7 @@ fn mode_1() -> AnyResult<()> {
         bail!("屏幕高度过小")
     }
 
-    execute!(stdout(), Print("请输入要查询的文件名：\n> "))?;
+    execute!(stdout(), Print("请输入要查询的文件名：\r\n> "))?;
 
     // 构建存储状态的结构体
     let mut state = Mode1State {
@@ -881,7 +880,7 @@ fn mode_2() -> AnyResult<()> {
         bail!("屏幕高度过小")
     }
 
-    execute!(stdout(), Print("请输入要查询的建图代码：\n> "))?;
+    execute!(stdout(), Print("请输入要查询的建图代码：\r\n> "))?;
 
     // 构建存储状态的结构体
     let mut state = Mode2State {
@@ -987,16 +986,16 @@ fn mode_3() -> AnyResult<()> {
     if set.is_empty() {
         msg.push_str("没有找到重复的地图文件");
     } else {
-        msg.push_str("找到以下地图代码相同的文件组：\n");
+        msg.push_str("找到以下地图代码相同的文件组：\r\n");
         for (i, str) in set.iter().enumerate() {
-            msg.push_str(format!("\n组 {}:\n", i + 1).as_str());
+            msg.push_str(format!("\r\n组 {}:\r\n", i + 1).as_str());
             let file_list: Vec<&str> = str.split(",").collect();
             for filepath in file_list {
-                msg.push_str(format!("  - {}\n", filepath).as_str());
+                msg.push_str(format!("  - {}\r\n", filepath).as_str());
             }
         }
     }
-    msg.push_str(format!("\n耗时: {:.2}s", past_time.as_secs_f32()).as_str());
+    msg.push_str(format!("\r\n耗时: {:.2}s", past_time.as_secs_f32()).as_str());
     print_output(msg.as_str());
 }
 
