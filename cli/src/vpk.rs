@@ -3,7 +3,9 @@ use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::path::Path;
 use std::ptr;
 
-#[link(name = "vpkinfo", kind = "raw-dylib")]
+//":vpkinfo.so" 告知链接器，链接 vpkinfo.so 而不是 libvpkinfo.so
+#[cfg_attr(target_os = "linux", link(name = ":vpkinfo.so", kind = "dylib"))]
+#[cfg_attr(target_os = "windows", link(name = "vpkinfo", kind = "raw-dylib"))]
 unsafe extern "C" {
     #[link_name = "FreeString"]
     unsafe fn free_string(string: *const c_char);

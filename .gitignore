@@ -1,5 +1,7 @@
 cli/target/
-cli/VpkInfo.dll
+cli/libs/*
+!cli/libs/vpkinfo.dll
+!cli/libs/vpkinfo.so
 
 
 lib/bin/

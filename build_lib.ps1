@@ -1,9 +1,9 @@
 #!/usr/bin/env pwsh
-# publish-and-copy.ps1
+# build_lib.ps1
 
 # 1. 执行 dotnet publish 命令
-Write-Host "正在发布 Vpkinfo 项目..." -ForegroundColor Green
-dotnet publish ./lib/Vpkinfo.csproj -c Release -r win-x64
+Write-Host "正在发布 VpkInfo 项目..." -ForegroundColor Green
+dotnet publish ./lib/VpkInfo.csproj -c Release -r win-x64
 
 # 检查发布是否成功
 if ($LASTEXITCODE -ne 0) {
@@ -14,8 +14,8 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "发布成功！" -ForegroundColor Green
 
 # 2. 定义源文件和目标路径
-$sourceFile = "lib\bin\Release\net9.0\win-x64\publish\Vpkinfo.dll"
-$destinationDir = "cli\"
+$sourceFile = "lib\bin\Release\net9.0\win-x64\publish\vpkinfo.dll"
+$destinationDir = "cli\libs\"
 
 # 检查源文件是否存在
 if (-not (Test-Path $sourceFile)) {
@@ -32,8 +32,6 @@ if (-not (Test-Path $destinationDir)) {
 
 # 复制文件
 Write-Host "正在复制文件..." -ForegroundColor Green
-# Write-Host "从: $sourceFile" -ForegroundColor Gray
-# Write-Host "到: $destinationDir" -ForegroundColor Gray
 
 try {
     Copy-Item -Path $sourceFile -Destination $destinationDir -Force
