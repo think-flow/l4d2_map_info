@@ -15,6 +15,10 @@
         <IlcOptimizationPreference>Size</IlcOptimizationPreference>
         <IlcLinkerOptimizationPreference>Size</IlcLinkerOptimizationPreference>
 
+        <!-- 使用UPX压缩生成的dll文件 -->
+        <UseSystemResourceKeys>true</UseSystemResourceKeys>
+        <InvariantGlobalization>true</InvariantGlobalization>
+
         <!-- 去掉调试相关 -->
         <DebugType>none</DebugType>
         <DebugSymbols>false</DebugSymbols>
@@ -48,7 +52,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="ValvePak" Version="3.0.3.132"/>
+        <PackageReference Include="PublishAotCompressed" Version="1.0.5" />
+        <PackageReference Include="ValvePak" Version="3.0.3.132" />
     </ItemGroup>
 
 </Project>
