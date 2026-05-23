@@ -111,16 +111,16 @@ impl VPKInfo {
         })
     }
 
-    pub fn get_mission(&self) -> color_eyre::Result<String> {
+    pub fn get_mission(&self) -> color_eyre::Result<&str> {
         self.mission_content
-            .clone()
-            .ok_or_else(|| eyre!("该文件没有misson信息"))
+            .as_deref()
+            .ok_or_else(|| eyre!("该文件没有mission信息"))
     }
 
     #[allow(dead_code)]
-    pub fn get_addoninfo(&self) -> color_eyre::Result<String> {
+    pub fn get_addoninfo(&self) -> color_eyre::Result<&str> {
         self.addoninfo_content
-            .clone()
+            .as_deref()
             .ok_or_else(|| eyre!("该文件没有addoninfo信息"))
     }
 }

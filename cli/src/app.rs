@@ -149,7 +149,7 @@ impl App {
         for (file_name, file_path) in &self.vpk_files {
             if let Ok(vpk_info) = vpk::VPKInfo::new(file_path) {
                 if let Ok(mission) = vpk_info.get_mission() {
-                    let maps = mission::parse_coop_maps(&mission);
+                    let maps = mission::parse_coop_maps(mission);
                     if !maps.is_empty() {
                         self.map_cache.insert(file_name.clone(), maps);
                     }
