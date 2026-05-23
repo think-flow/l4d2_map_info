@@ -12,3 +12,5 @@ lib/_ReSharper.Caches/
 lib/.idea/
 lib/Lib.sln.DotSettings.user
 lib/Folder.DotSettings.user
+
+.claude
