@@ -4,7 +4,7 @@ pub mod mission;
 
 use std::{collections::HashMap, fs, path::PathBuf, time::SystemTime};
 
-fn get_vpks() -> color_eyre::Result<(
+pub(crate) fn get_vpks() -> color_eyre::Result<(
     indexmap::IndexMap<String, PathBuf>,
     HashMap<String, SystemTime>,
     HashMap<String, SystemTime>,

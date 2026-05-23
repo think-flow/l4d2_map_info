@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>map_info - L4D2 VPK 浏览工具</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0d1117;
+    color: #e6edf3;
+    line-height: 1.7;
+    padding: 40px 20px;
+  }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 {
+    font-size: 2.2em;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #58a6ff, #3fb950);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subtitle { color: #8b949e; margin-bottom: 40px; font-size: 1.05em; }
+  h2 {
+    font-size: 1.3em;
+    margin: 36px 0 14px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #30363d;
+    color: #f0f6fc;
+  }
+  h3 { font-size: 1.05em; margin: 20px 0 8px; color: #d2d8e0; }
+  p { margin-bottom: 12px; color: #c9d1d9; }
+  ul { margin: 8px 0 16px 20px; }
+  li { margin-bottom: 4px; color: #c9d1d9; }
+
+  .card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin: 16px 0;
+  }
+  .card-title {
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: #f0f6fc;
+  }
+
+  .arch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px;
+    margin: 12px 0;
+  }
+  .arch-item {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .arch-item .name {
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.9em;
+    color: #58a6ff;
+    word-break: break-all;
+  }
+  .arch-item .desc {
+    font-size: 0.88em;
+    color: #8b949e;
+    margin-top: 4px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 0.92em;
+  }
+  th, td {
+    border: 1px solid #30363d;
+    padding: 8px 12px;
+    text-align: left;
+  }
+  th {
+    background: #161b22;
+    color: #f0f6fc;
+    font-weight: 600;
+  }
+  td { color: #c9d1d9; }
+  td:first-child {
+    font-family: "SFMono-Regular", Consolas, monospace;
+    white-space: nowrap;
+    color: #f0883e;
+  }
+
+  .flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 14px 0 18px;
+    font-size: 0.92em;
+  }
+  .flow-step {
+    background: #1c2333;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    padding: 6px 12px;
+    color: #c9d1d9;
+    white-space: nowrap;
+  }
+  .flow-arrow {
+    color: #484f58;
+    font-weight: bold;
+  }
+
+  .feature-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 10px;
+    margin: 12px 0;
+  }
+  .feature-item {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .feature-item .key {
+    display: inline-block;
+    background: #30363d;
+    border-radius: 3px;
+    padding: 0 6px;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85em;
+    color: #f0f6fc;
+    min-width: 24px;
+    text-align: center;
+  }
+  .feature-item .label {
+    color: #c9d1d9;
+    margin-left: 6px;
+  }
+
+  code {
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.88em;
+    background: #1c2333;
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: #f0883e;
+  }
+  pre {
+    background: #1c2333;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    margin: 12px 0;
+    font-size: 0.9em;
+    line-height: 1.5;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    color: #c9d1d9;
+  }
+  .comment { color: #8b949e; }
+  .keyword { color: #ff7b72; }
+  .variant { color: #58a6ff; }
+
+  @media (max-width: 600px) {
+    body { padding: 20px 12px; }
+    h1 { font-size: 1.6em; }
+    .arch-grid { grid-template-columns: 1fr; }
+    .feature-list { grid-template-columns: 1fr; }
+    td:first-child { white-space: normal; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>map_info</h1>
+<p class="subtitle">
+  Terminal UI 工具 — 浏览 Left 4 Dead 2 <code>.vpk</code> 插件文件，支持模糊搜索、地图代码过滤、重复检测
+</p>
+
+<!-- 项目概况 -->
+<h2>项目概况</h2>
+<p>
+  <code>map_info</code> 是一个纯 Rust 构建的终端界面应用，帮助 L4D2 玩家管理和浏览 VPK 插件文件。
+  它解析 VPK 文件中的 <code>missions/*.txt</code> 内容，提取合作模式地图代码，并提供模糊搜索（带高亮）、
+  重复文件检测、地图代码列表（支持复制到剪贴板）等功能。启动时自动在后台扫描所有 VPK。
+  无任何外部本地依赖（不需要 .NET、不需要 C++ 运行时）。
+</p>
+
+<!-- 功能列表 -->
+<h2>功能特性</h2>
+<div class="feature-list">
+  <div class="feature-item">
+    <span class="key">s</span>
+    <span class="label">文件名模糊搜索 — Jaro-Winkler + Levenshtein 混合评分，匹配字符黄色高亮</span>
+  </div>
+  <div class="feature-item">
+    <span class="key">c</span>
+    <span class="label">地图代码过滤 — 按 <code>modes → coop → Map</code> 值搜索</span>
+  </div>
+  <div class="feature-item">
+    <span class="key">d</span>
+    <span class="label">重复文件检测 — Union-Find 算法找出共享地图的文件</span>
+  </div>
+  <div class="feature-item">
+    <span class="key">f</span>
+    <span class="label">地图代码列表 — 查看选中文件的合作地图列表，支持上下选择 + Enter 复制到剪贴板</span>
+  </div>
+  <div class="feature-item">
+    <span class="key">t / r</span>
+    <span class="label">排序切换 — 创建时间/修改时间、升序/降序</span>
+  </div>
+  <div class="feature-item">
+    <span class="key">→</span>
+    <span class="label">查看 Mission 内容 — 带滚动百分比的可视化阅读</span>
+  </div>
+  <div class="feature-item">
+    <span class="key">PgUp/PgDn</span>
+    <span class="label">页面感知滚动 — 考虑换行文本的实际行数</span>
+  </div>
+  <div class="feature-item">
+    <span class="key">后台扫描</span>
+    <span class="label">启动时后台线程扫描全部 VPK，底部进度条实时显示，不影响界面操作</span>
+  </div>
+  <div class="feature-item">
+    <span class="key">Toast</span>
+    <span class="label">操作反馈 — 复制地图代码、清除过滤器等操作给出自动消失的浮动提示</span>
+  </div>
+</div>
+
+<!-- 架构 -->
+<h2>架构设计</h2>
+<p>
+  采用 <strong>Screen 驱动</strong>架构。事件处理和渲染根据当前 Screen 枚举值分发，
+  每个 Screen 有独立的事件处理器和渲染逻辑。新增界面只需添加枚举变体和对应模块。
+</p>
+
+<pre><code><span class="keyword">enum</span> <span class="variant">Screen</span> {
+    <span class="variant">FileList</span>,             <span class="comment">// 默认：文件列表示</span>
+    <span class="variant">Content</span>,              <span class="comment">// 查看 mission 内容</span>
+    <span class="variant">Filter</span>(<span class="variant">FilterMode</span>),   <span class="comment">// 过滤对话框（文件名/地图代码）</span>
+    <span class="variant">Duplicates</span>,           <span class="comment">// 重复文件弹窗</span>
+    <span class="variant">MapCodes</span>,             <span class="comment">// 地图代码弹窗（可选中复制）</span>
+}</code></pre>
+
+<div class="card">
+  <div class="card-title">事件分发流程</div>
+  <pre><code><span class="comment">// event_handler.rs — 非阻塞 poll(33ms)，全局键优先，然后按 Screen 分发</span>
+fn handle_events(app: &amp;mut App) {
+    <span class="comment">// 1. 全局键（Ctrl+C, Ctrl+←/→, Ctrl+X）</span>
+    <span class="comment">// 2. 按 Screen 分发</span>
+    match app.screen {
+        <span class="variant">Screen::Content</span>    => content_handler(app, key),
+        <span class="variant">Screen::Filter</span>(_)   => filter_handler(app, key),
+        <span class="variant">Screen::Duplicates</span> => duplicates_handler(app, key),
+        <span class="variant">Screen::MapCodes</span>   => map_codes_handler(app, key),
+        <span class="variant">Screen::FileList</span>   => list_handler(app, key),
+    }
+}</code></pre>
+</div>
+
+<!-- 模块结构 -->
+<h2>模块结构</h2>
+<div class="arch-grid">
+  <div class="arch-item">
+    <div class="name">main.rs</div>
+    <div class="desc">入口：安装 color_eyre，创建 App，进入 ratatui 事件循环</div>
+  </div>
+  <div class="arch-item">
+    <div class="name">lib.rs</div>
+    <div class="desc">模块声明 + get_vpks() 发现 VPK 文件</div>
+  </div>
+  <div class="arch-item">
+    <div class="name">app.rs</div>
+    <div class="desc">App 结构体、run/init/draw、后台扫描（mpsc channel）、find_duplicates、show_toast</div>
+  </div>
+  <div class="arch-item">
+    <div class="name">app/screen.rs</div>
+    <div class="desc">Screen + FilterMode 枚举 — 界面状态唯一来源</div>
+  </div>
+  <div class="arch-item">
+    <div class="name">app/list_state.rs</div>
+    <div class="desc">FileListState — 封装 ratatui ListState + 页面感知滚动</div>
+  </div>
+  <div class="arch-item">
+    <div class="name">app/content_state.rs</div>
+    <div class="desc">ContentState — mission 内容滚动状态</div>
+  </div>
+  <div class="arch-item">
+    <div class="name">app/filter_state.rs</div>
+    <div class="desc">FilterState — 过滤输入字符串 + 模式</div>
+  </div>
+  <div class="arch-item">
+    <div class="name">app/sort_state.rs</div>
+    <div class="desc">SortState + SortField — 排序字段和方向</div>
+  </div>
+  <div class="arch-item">
+    <div class="name">app/event_handler.rs</div>
+    <div class="desc">非阻塞键盘事件处理 — poll(33ms) → 全局键 → Screen 分发</div>
+  </div>
+  <div class="arch-item">
+    <div class="name">app/list_layout.rs</div>
+    <div class="desc">文件列表面板渲染 + Jaro-Winkler/Levenshtein 模糊匹配 + 匹配字符高亮</div>
+  </div>
+  <div class="arch-item">
+    <div class="name">app/content_layout.rs</div>
+    <div class="desc">右面板渲染：mission 内容、过滤弹窗、重复文件弹窗、地图代码弹窗</div>
+  </div>
+  <div class="arch-item">
+    <div class="name">vpk.rs</div>
+    <div class="desc">纯 Rust VPK v1 解析器 — 签名验证、目录树解析、文件读取</div>
+  </div>
+  <div class="arch-item">
+    <div class="name">mission.rs</div>
+    <div class="desc">Valve KeyValues 解析器 — 提取 modes → coop → Map 值</div>
+  </div>
+</div>
+
+<!-- 数据流 -->
+<h2>数据流</h2>
+<div class="flow">
+  <span class="flow-step">.vpk 文件</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">get_vpks()</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">IndexMap</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">App::init()</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step" style="border-color:#3fb950;">后台线程扫描</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">mpsc 事件</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">map_cache</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">list_layout 渲染</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">用户选择文件</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">VPKInfo::new()</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">content_layout 渲染</span>
+</div>
+
+<p>
+  启动时 <code>App::init()</code> 调用 <code>start_background_scan()</code> 创建后台线程，
+  通过 <code>mpsc::channel</code> 发送 <code>ScanEvent</code>（Progress / MapEntry / Complete）。
+  主线程每帧通过 <code>process_scan_events()</code> 拉取事件更新 <code>map_cache</code> 和进度条。
+  此后筛选/去重/地图代码列表等操作直接使用缓存，无需重复解析。
+</p>
+
+<!-- 技术细节 -->
+<h2>技术细节</h2>
+
+<h3>VPK 解析 — vpk.rs</h3>
+<ul>
+  <li>只支持 VPK v1 单文件格式（<code>0x55AA1234</code> 签名）</li>
+  <li>解析目录树结构：<code>扩展名 → 目录 → 文件名 → 18 字节条目</code></li>
+  <li>读取文件数据时支持三种 archive_index：<code>0x7FFF</code>、<code>0xFF7F</code>、<code>0</code>（数据在同一个文件中）</li>
+  <li>返回 <code>&amp;str</code>，不克隆数据</li>
+</ul>
+
+<h3>KeyValues 解析 — mission.rs</h3>
+<ul>
+  <li>递归 tokenizer — 处理 <code>//</code> 注释、引号字符串、花括号</li>
+  <li>提取 <code>modes → coop</code> 路径下的所有 <code>Map</code> 值</li>
+  <li>忽略同层其他模式（versus、survival 等）</li>
+</ul>
+
+<h3>模糊匹配 &amp; 高亮 — list_layout.rs</h3>
+<ul>
+  <li>Jaro-Winkler 相似度 + Levenshtein 编辑距离混合评分</li>
+  <li>子串命中按 <code>匹配长度/文件名长度</code> 加权加分，取代固定满分 1.0</li>
+  <li>匹配位置系数：匹配越靠前分数越高，避免中间匹配与开头匹配并列</li>
+  <li>平滑阈值：<code>0.1 + (输入长度/12).min(0.7)</code>，1 字符→0.18，4→0.43，8→0.77</li>
+  <li>匹配字符在文件名中以黄色前景高亮显示（大小写不敏感）</li>
+  <li>地图过滤时取所有 Map 值的最高分</li>
+</ul>
+
+<h3>重复检测 — app.rs</h3>
+<ul>
+  <li>基于 Union-Find 算法，按共享地图值合并文件组</li>
+  <li>只显示至少包含一个重复地图值的文件组</li>
+  <li>组内按文件名排序输出</li>
+</ul>
+
+<h3>后台扫描 — app.rs</h3>
+<ul>
+  <li>启动时在独立线程中扫描所有 VPK 文件</li>
+  <li>通过 <code>mpsc::channel</code> 与主线程通信</li>
+  <li>主线程每帧通过 <code>try_recv()</code> 非阻塞拉取事件</li>
+  <li>底部状态栏右侧显示 <code>Gauge</code> 进度条</li>
+  <li>扫描完成后进度条自动消失</li>
+</ul>
+
+<h3>Toast 通知 — app.rs</h3>
+<ul>
+  <li>统一通过 <code>App::show_toast(msg)</code> 调用</li>
+  <li>在状态栏上方渲染暗底白字浮动条</li>
+  <li>2 秒后自动消失</li>
+  <li>用于复制地图代码、清除过滤器等操作反馈</li>
+</ul>
+
+<!-- 按键 -->
+<h2>快捷键</h2>
+<table>
+  <tr><th>按键</th><th>功能</th></tr>
+  <tr><td>q</td><td>退出</td></tr>
+  <tr><td>s</td><td>打开文件名过滤器（模糊搜索，匹配字符高亮）</td></tr>
+  <tr><td>c</td><td>打开地图代码过滤器</td></tr>
+  <tr><td>d</td><td>显示重复文件检测弹窗</td></tr>
+  <tr><td>f</td><td>显示选中文件的地图代码列表（↑↓选择，Enter 复制到剪贴板）</td></tr>
+  <tr><td>t</td><td>切换排序字段（创建时间 / 修改时间）</td></tr>
+  <tr><td>r</td><td>切换排序方向（升序 / 降序）</td></tr>
+  <tr><td>Ctrl+X</td><td>清空当前过滤器</td></tr>
+  <tr><td>↑ / ↓</td><td>文件列表导航</td></tr>
+  <tr><td>→</td><td>查看选中文件的 Mission 内容</td></tr>
+  <tr><td>←</td><td>返回文件列表</td></tr>
+  <tr><td>Ctrl+← / Ctrl+→</td><td>调整列表/内容分栏宽度</td></tr>
+  <tr><td>PgUp / PgDn</td><td>内容翻页（也支持列表页面感知滚动）</td></tr>
+  <tr><td>Home / End</td><td>内容/列表跳转到开头/末尾</td></tr>
+  <tr><td>Enter / Esc</td><td>关闭弹窗（过滤、去重、地图代码等）</td></tr>
+</table>
+
+<!-- 构建 -->
+<h2>构建</h2>
+<p>需要 Rust edition 2024。</p>
+
+<pre><code><span class="comment"># 调试模式（使用 L4D2 addons 目录）</span>
+cd cli && cargo run
+
+<span class="comment"># 发布模式（使用当前工作目录）</span>
+cd cli && cargo build --release
+
+<span class="comment"># 依赖</span>
+<span class="comment"># color-eyre, crossterm, indexmap, ratatui, textwrap, strsim, arboard</span></code></pre>
+
+</div>
+</body>
+</html>

@@ -4,64 +4,75 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-`map_info` is a terminal UI application for browsing Left 4 Dead 2 `.vpk` (Valve Pak) addon files. It displays a scrollable file list with fuzzy search, and renders the `missions/*.txt` content of selected VPK files.
+`map_info` is a terminal UI application for browsing Left 4 Dead 2 `.vpk` (Valve Pak) addon files. It displays a scrollable file list with fuzzy search (by filename or by coop map name), duplicate map detection, and renders the `missions/*.txt` content of selected VPK files. It also supports sorting by creation or modification time.
 
 ## Architecture
 
-Two-tier native interop architecture:
+Pure Rust binary — no external native dependencies. All VPK parsing, KeyValues parsing, and TUI rendering are implemented directly in Rust.
 
-1. **`lib/`** — C# NativeAOT library (`VpkInfo.csproj`) that produces a stripped native shared library (`vpkinfo.dll` / `vpkinfo.so`). Uses the `ValvePak` NuGet package to parse VPK files and exposes C-ABI functions via `[UnmanagedCallersOnly]`. The `Vpk` class reads `addoninfo.txt` and `missions/*.txt` entries from a VPK file. `NativeExports` wraps it with `GCHandle`-based lifetime management and UTF-8 string marshaling.
+### Architecture: Screen-driven dispatch
 
-2. **`cli/`** — Rust TUI binary (`ratatui` + `crossterm`) that FFI-binds to the native library. Discovers `.vpk` files, presents a file list with fuzzy filtering, and renders scrollable mission content. The `App` struct owns all UI state.
+The UI uses a `Screen` enum to manage application state. Event handling and rendering dispatch based on the current screen, making it straightforward to add new dialogs or views:
+
+```rust
+enum Screen {
+    FileList,             // Default: file list with optional filter
+    Content,              // Viewing mission content
+    Filter(FilterMode),   // Filter dialog (by filename or map name)
+    Duplicates,           // Duplicate detection dialog
+    MapCodes,             // Map codes list for selected file
+}
+```
 
 ### Key source files
 
 | File | Role |
 |---|---|
 | `cli/src/main.rs` | Entry point: installs `color_eyre`, creates `App`, runs the ratatui event loop |
-| `cli/src/lib.rs` | `get_vpks()` — discovers `.vpk` files in the working directory (or hardcoded L4D2 addons path in debug builds), sorted by creation time |
-| `cli/src/app.rs` | `App` struct definition, `init()`, main `draw()` layout (outer vertical + inner horizontal split) |
-| `cli/src/app/event_handler.rs` | Keyboard input handling with a `PREVENT`/`ALLOW` event propagation pattern. Two-phase: list handler then content handler |
-| `cli/src/app/list_layout.rs` | File list rendering with fuzzy matching via Jaro-Winkler + Levenshtein hybrid scoring |
-| `cli/src/app/content_layout.rs` | Mission content rendering with scroll state management, filter dialog overlay |
-| `cli/src/vpk.rs` | `VPKInfo` — safe Rust wrapper around the C# native library FFI, with `Send` impl |
-| `cli/build.rs` | Copies the native library (`vpkinfo.dll`/`.so`) from `cli/libs/` into the cargo output directory |
-| `lib/Vpk.cs` | C# VPK reader + `NativeExports` FFI surface |
+| `cli/src/lib.rs` | Module declarations; `get_vpks()` — discovers `.vpk` files, returns file list + timestamp maps |
+| `cli/src/app.rs` | `App` struct definition, `run()`/`init()`, background scan via `mpsc` channel, top-level `draw()` layout, `find_duplicates()`, `show_toast()` |
+| `cli/src/app/screen.rs` | `Screen` and `FilterMode` enums — single source of truth for app state transitions |
+| `cli/src/app/list_state.rs` | `FileListState` — wraps ratatui `ListState` with page-aware scrolling and line-count tracking |
+| `cli/src/app/content_state.rs` | `ContentState` — mission content scroll state management |
+| `cli/src/app/filter_state.rs` | `FilterState` — filter input string + mode |
+| `cli/src/app/sort_state.rs` | `SortState` — sort field (`CreatedAt`/`ModifiedAt`) + ascending/descending toggle |
+| `cli/src/app/event_handler.rs` | Keyboard input handling — non-blocking poll (33ms), global keys first, then dispatches by `Screen` |
+| `cli/src/app/list_layout.rs` | File list rendering with fuzzy matching via Jaro-Winkler + Levenshtein hybrid scoring + substring position bonus, supports both filename and map-name filtering, highlights matched characters in yellow |
+| `cli/src/app/content_layout.rs` | Right-pane rendering: mission content view, filter dialog overlay, duplicates dialog, map codes dialog |
+| `cli/src/vpk.rs` | Pure Rust VPK version 1 parser — validates signature (`0x55AA1234`), parses directory tree, reads entries. Single-file VPK only |
+| `cli/src/mission.rs` | Valve KeyValues parser — tokenizes mission content with `//` comment support, exposes `parse_coop_maps()` to extract `modes -> coop -> Map` values |
 
 ### Data flow
 
 ```
 .vpk files on disk
-  → get_vpks() discovers files → IndexMap<String, PathBuf>
-  → App renders list with fuzzy filter (input_state)
-  → User selects file → VPKInfo::new(path) calls CreateVk FFI
-  → get_mission() calls GetMissionContent FFI
+  → get_vpks() discovers files → IndexMap<String, PathBuf> + timestamp maps
+  → App::init() populates file list, sorts by creation time descending
+  → start_background_scan() spawns thread to scan all VPKs for coop maps
+  → Background thread sends ScanEvent::Progress / MapEntry / Complete via mpsc channel
+  → Main thread drains events each frame via process_scan_events()
+  → map_cache populated in real-time, progress bar updates on status bar
+  → App draws list (left pane) + right pane by Screen
+  → User selects file → VPKInfo::new(path) + get_mission() reads mission content
   → Content rendered in scrollable Paragraph
 ```
 
-### FFI surface (C# → Rust)
+### Background scan
 
-The Rust side (`cli/src/vpk.rs`) binds to: `CreateVk`, `DestroyVk`, `GetAddonInfoContent`, `GetMissionContent`, `GetLastErrorMessage`, `FreeString`. Return code `-1` means error (call `GetLastErrorMessage`). Return code `0` with null content pointer means the entry doesn't exist in the VPK.
+On startup, a background thread scans all VPK files to extract coop map codes. Results are sent via `mpsc::channel` as `ScanEvent` messages. The main thread drains these in `process_scan_events()` before each frame draw. A `Gauge` progress bar is shown on the bottom-right of the status bar during scanning.
+
+### Toast notifications
+
+`App::show_toast(msg)` sets a timed notification that auto-disappears after 2 seconds. Rendered as a dark-background overlay above the status bar. Used for copy confirmation, filter-clear feedback, etc.
 
 ## Build & run
 
-**Prerequisites:** Rust (edition 2024), .NET 9 SDK, `dotnet` on PATH.
+**Prerequisites:** Rust (edition 2024).
 
 ```bash
-# Build the C# native library (Windows)
-./build_lib.ps1
-
-# Build the C# native library (Linux)
-./build_lib.sh
-
-# Build and run the Rust TUI (debug)
-cd cli && cargo run
-
-# Build release (optimized binary)
-cd cli && cargo build --release
+cd cli && cargo run          # debug (uses L4D2 addons directory)
+cd cli && cargo build --release  # release (uses current working directory)
 ```
-
-The build script `build_lib.ps1`/`.sh` runs `dotnet publish -c Release` for the target platform, then copies the output native library to `cli/libs/`. The cargo `build.rs` copies it from there into the binary output directory at build time.
 
 In debug builds, `get_vpks()` looks for VPK files in the L4D2 addons directory rather than the current working directory.
 
@@ -70,10 +81,21 @@ In debug builds, `get_vpks()` looks for VPK files in the L4D2 addons directory r
 | Key | Action |
 |---|---|
 | `q` | Exit |
-| `s` | Open file filter (fuzzy search) |
-| `Ctrl+X` | Clear filter |
+| `s` | Open filename filter (fuzzy search by filename, matched chars highlighted) |
+| `c` | Open map filter (fuzzy search by coop map name) |
+| `d` | Show duplicate detection dialog (files sharing same map values) |
+| `f` | Show map codes list for selected file (selectable, Enter to copy) |
+| `t` | Toggle sort by creation time / modification time |
+| `r` | Toggle sort order ascending / descending |
+| `Ctrl+X` | Clear current filter |
 | `↑`/`↓` | Navigate file list |
 | `→` | View selected file's mission content |
 | `←` | Return to file list |
 | `Ctrl+←`/`→` | Resize list/content split |
-| `PgUp`/`PgDn`/`Home`/`End` | Scroll content |
+| `PgUp`/`PgDn` | Scroll content by page (also scrolls file list by visible height) |
+| `Home`/`End` | Scroll content to top/bottom (also navigates file list to first/last) |
+| `Enter`/`Esc` | Dismiss dialogs (filter, duplicates, map codes) |
+
+## Cargo.toml highlights
+
+Key dependencies: `color-eyre` (error handling), `crossterm` (terminal), `indexmap` (ordered map), `ratatui` (TUI framework, feature `unstable-rendered-line-info`), `textwrap` (word wrapping), `strsim` (Jaro-Winkler + Levenshtein), `arboard` (clipboard). Release profile uses LTO, size optimization, stripping, and panic=abort.
