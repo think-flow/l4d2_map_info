@@ -7,6 +7,7 @@ mod list_state;
 mod screen;
 mod sort_state;
 
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::io;
 use std::path::PathBuf;
@@ -118,16 +119,30 @@ impl App {
         let (tx, rx) = mpsc::channel();
         self.scan_event_rx = Some(rx);
 
-        let files = self.vpk_files.clone();
+        let files: Vec<(String, PathBuf)> = self
+            .vpk_files
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        let total = files.len();
+        self.scan_progress = ScanProgress {
+            active: total > 0,
+            current: 0,
+            total,
+            file: String::new(),
+        };
+
         std::thread::spawn(move || {
-            let total = files.len();
             if total == 0 {
                 let _ = tx.send(ScanEvent::Complete);
                 return;
             }
-            for (i, (file_name, file_path)) in files.iter().enumerate() {
+
+            let counter = std::sync::atomic::AtomicUsize::new(0);
+            files.par_iter().for_each(|(file_name, file_path)| {
+                let current = counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
                 let _ = tx.send(ScanEvent::Progress {
-                    current: i + 1,
+                    current,
                     total,
                     file: file_name.clone(),
                 });
@@ -143,7 +158,7 @@ impl App {
                         }
                     }
                 }
-            }
+            });
             let _ = tx.send(ScanEvent::Complete);
         });
     }
