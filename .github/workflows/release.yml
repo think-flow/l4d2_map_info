@@ -22,7 +22,7 @@ jobs:
             os: ubuntu-latest
             archive: tar.gz
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -32,7 +32,7 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libx11-dev libxcb1-dev libxkbcommon-dev
 
-      - uses: Swatinem/rust-cache@v3
+      - uses: Swatinem/rust-cache@v2
         with:
           workspaces: cli
           key: release-${{ matrix.target }}
@@ -53,7 +53,7 @@ jobs:
           tar czf ../../../map_info-${{ matrix.target }}.tar.gz map_info
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: map_info-${{ matrix.target }}
           path: cli/map_info-${{ matrix.target }}.*
@@ -63,16 +63,16 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: artifacts/*
