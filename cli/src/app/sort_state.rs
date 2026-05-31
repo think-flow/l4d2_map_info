@@ -43,11 +43,7 @@ impl SortState {
                 .copied()
                 .unwrap_or(SystemTime::UNIX_EPOCH);
             let cmp = t1.cmp(&t2);
-            if self.ascending {
-                cmp
-            } else {
-                cmp.reverse()
-            }
+            if self.ascending { cmp } else { cmp.reverse() }
         });
     }
 

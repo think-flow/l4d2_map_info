@@ -41,7 +41,8 @@ pub fn render_mission(app: &mut App, frame: &mut Frame, area: Rect) -> color_eyr
 
                     block = block.title(format!(
                         " mission内容 {}% ",
-                        if line_count == 0 || app.content.scroll_offset + app.content.area_height >= line_count
+                        if line_count == 0
+                            || app.content.scroll_offset + app.content.area_height >= line_count
                         {
                             100
                         } else {

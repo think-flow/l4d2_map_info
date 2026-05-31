@@ -57,7 +57,11 @@ fn tokenize(raw: &str) -> Vec<Token> {
 }
 
 fn expect_brace(tokens: &[Token], pos: &mut usize, open: bool) -> bool {
-    let expected = if open { Token::OpenBrace } else { Token::CloseBrace };
+    let expected = if open {
+        Token::OpenBrace
+    } else {
+        Token::CloseBrace
+    };
     if *pos < tokens.len() && tokens[*pos] == expected {
         *pos += 1;
         true

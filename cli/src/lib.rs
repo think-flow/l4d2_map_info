@@ -1,6 +1,6 @@
 pub mod app;
-mod vpk;
 pub mod mission;
+mod vpk;
 
 use std::{collections::HashMap, fs, path::PathBuf, time::SystemTime};
 

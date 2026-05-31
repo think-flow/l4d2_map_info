@@ -43,7 +43,9 @@ impl ContentState {
     }
 
     fn get_botton_offset(&self) -> u16 {
-        self.line_count.saturating_sub(self.area_height).saturating_add(1)
+        self.line_count
+            .saturating_sub(self.area_height)
+            .saturating_add(1)
     }
 
     fn get_viewd_offset(&self) -> u16 {

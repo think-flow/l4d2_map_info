@@ -18,9 +18,7 @@ pub fn render_list(app: &mut App, frame: &mut Frame, area: Rect) -> color_eyre::
 
     let max_width = area.width.saturating_sub(3) as usize;
     let matched_list = match app.filter.mode {
-        FilterMode::MapName => {
-            match_file_by_map(&app.filter.input, &app.vpk_files, &app.map_cache)
-        }
+        FilterMode::MapName => match_file_by_map(&app.filter.input, &app.vpk_files, &app.map_cache),
         FilterMode::FileName => match_file(&app.filter.input, &app.vpk_files),
     };
 

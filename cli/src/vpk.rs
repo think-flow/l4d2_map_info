@@ -17,8 +17,7 @@ pub struct VPKInfo {
 impl VPKInfo {
     pub fn new(path: impl AsRef<Path>) -> color_eyre::Result<Self> {
         let path = path.as_ref();
-        let file =
-            File::open(path).map_err(|e| eyre!("无法打开文件 {}: {}", path.display(), e))?;
+        let file = File::open(path).map_err(|e| eyre!("无法打开文件 {}: {}", path.display(), e))?;
         let mut reader = BufReader::new(file);
 
         // Parse header
@@ -75,8 +74,8 @@ impl VPKInfo {
                     }
 
                     // Check if this is a mission file or addoninfo
-                    let is_mission =
-                        extension.eq_ignore_ascii_case("txt") && directory.eq_ignore_ascii_case("missions");
+                    let is_mission = extension.eq_ignore_ascii_case("txt")
+                        && directory.eq_ignore_ascii_case("missions");
                     let is_addoninfo = extension.eq_ignore_ascii_case("txt")
                         && directory.is_empty()
                         && filename.eq_ignore_ascii_case("addoninfo");
@@ -141,10 +140,7 @@ fn read_file_data(
         // Data follows the directory tree in the same file
         tree_end + entry_offset as u64
     } else {
-        return Err(eyre!(
-            "不支持多文件VPK (archive_index={})",
-            archive_index
-        ));
+        return Err(eyre!("不支持多文件VPK (archive_index={})", archive_index));
     };
 
     let saved_pos = reader.stream_position()?;
